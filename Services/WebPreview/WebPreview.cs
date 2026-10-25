@@ -5,11 +5,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using ESPWebBridge.Services.Options;
 
-namespace ESPWebBridge.Services;
+namespace ESPWebBridge.Services.WebPreview;
 
-public sealed class YarpForwarderService : IManagedService
+public sealed class WebPreviewService : IManagedService
 {
-    public string Name => "Yarp Forwarder";
+    public string Name => "WebPage Preview";
     public ServiceStatus Status { get; private set; } = ServiceStatus.Stopped;
     public event EventHandler? StatusChanged;
 

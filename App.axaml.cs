@@ -3,7 +3,6 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using ESPWebBridge.ViewModels;
 using ESPWebBridge.Views;
-using ESPWebBridge.Services;
 
 namespace ESPWebBridge;
 
@@ -16,9 +15,9 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
-        var services = new IManagedService[]
+        var services = new Services.IManagedService[]
         {
-            new YarpForwarderService()
+            new Services.WebPreview.WebPreviewService()
         };
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)

@@ -8,7 +8,6 @@
         d:DataContext="{x:Static vm:DesignData.Main}"
         x:Class="ESPWebBridge.Views.MainWindow"
         x:DataType="vm:MainViewModel"
-        Icon="/Assets/avalonia-logo.ico"
         Title="ESPWebBridge">
 
     <TabControl >
