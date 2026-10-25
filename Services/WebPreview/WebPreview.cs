@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Yarp.ReverseProxy.Configuration;
+using System.IO;
+using System.Diagnostics;
 
 namespace ESPWebBridge.Services.WebPreview;
 
@@ -17,9 +19,10 @@ public sealed class WebPreviewService : IManagedService
     public ServiceStatus Status { get; private set; } = ServiceStatus.Stopped;
     public event EventHandler? StatusChanged;
 
-    public TextOption EspAddress { get; } = new("ESP Address", "http://localhost:5084");
+    public TextOption EspAddress { get; } = new("ESP Address", "http://localhost:5173");
+    public TextOption WebPageDir { get; } = new("WebPage Directory", "/home/viktorpotuznik/Documents/Coding/Projects/ESPWebBridge/Web");
 
-    public IReadOnlyList<IServiceOption> Options => [EspAddress];
+    public IReadOnlyList<IServiceOption> Options => [EspAddress, WebPageDir];
 
     private WebApplication? _app;
     private InMemoryConfigProvider? _proxyConfig;
@@ -54,7 +57,55 @@ public sealed class WebPreviewService : IManagedService
         if (_app is not null)
             return;
 
+        // TODO throw exception or create directory
+        if (!Directory.Exists(WebPageDir.Value)) throw new InvalidDataException("Invalid webpage directry: no such directory");
 
+        // TODO throw exception
+        if (!Uri.TryCreate(EspAddress.Value, UriKind.Absolute, out var uri) &&
+        (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)) return;
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "node",
+            WorkingDirectory = WebPageDir.Value,
+            Arguments = "--version"
+        };
+        var process = Process.Start(startInfo);
+        if (process is null) throw new InvalidOperationException("Failed to start node --version");
+        await process.WaitForExitAsync();
+        if (process.ExitCode != 0) throw new InvalidOperationException($"node failed: returned non-0 exit code: {process.ExitCode}");
+
+        startInfo = new ProcessStartInfo
+        {
+            FileName = "npm",
+            WorkingDirectory = WebPageDir.Value,
+            Arguments = "--version"
+        };
+        process = Process.Start(startInfo);
+        if (process is null) throw new InvalidOperationException("Failed to start npm --version");
+        await process.WaitForExitAsync();
+        if (process.ExitCode != 0) throw new InvalidOperationException($"npm failed: returned non-0 exit code: {process.ExitCode}");
+
+        startInfo = new ProcessStartInfo
+        {
+            FileName = "npm",
+            WorkingDirectory = WebPageDir.Value,
+            Arguments = "install"
+        };
+        process = Process.Start(startInfo);
+        if (process is null) throw new InvalidOperationException("Failed to start npm --version");
+        await process.WaitForExitAsync();
+        if (process.ExitCode != 0) throw new InvalidOperationException($"npm failed: returned non-0 exit code: {process.ExitCode}");
+        
+        startInfo = new ProcessStartInfo
+        {
+            FileName = "npm",
+            WorkingDirectory = WebPageDir.Value,
+            Arguments = "run dev -- --host 127.0.0.1 --port 5173 --strictPort"
+        };
+        process = Process.Start(startInfo);
+        if (process is null) throw new InvalidOperationException("Failed to start npm --version");
+        
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseUrls("http://127.0.0.1:5174");
 

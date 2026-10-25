@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia.Media;
@@ -27,6 +28,13 @@ public partial class ServiceViewModel : ViewModelBase
 
     public IReadOnlyList<IServiceOption> Options => _service.Options;
 
+    [ObservableProperty]
+    private string? errorMessage;
+
+    public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
+
+    partial void OnErrorMessageChanged(string? value) => OnPropertyChanged(nameof(HasError));
+
     public string ButtonText => Status switch
     {
         ServiceStatus.Stopped => "Start",
@@ -48,10 +56,25 @@ public partial class ServiceViewModel : ViewModelBase
     [RelayCommand]
     private async Task ToggleAsync()
     {
-        if (Status == ServiceStatus.Running)
-            await _service.StopAsync();
-        else
-            await _service.StartAsync();
+        ErrorMessage = null;
+        
+        try
+        {
+            if (Status == ServiceStatus.Running)
+                await _service.StopAsync();
+            else
+                await _service.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"{ex.GetType().Name}: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private void DismissError()
+    {
+        ErrorMessage = null;
     }
     
 }

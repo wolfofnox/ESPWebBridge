@@ -41,29 +41,47 @@
                 <Border Background="#34808080"
                         BorderThickness="2" BorderBrush="#60808080"
                         Margin="4" CornerRadius="12">
-                    <Grid VerticalAlignment="Center"
-                          ColumnDefinitions="*,Auto,Auto,Auto">
-                        <TextBlock Grid.Column="0"
-                                   Margin="7" VerticalAlignment="Center"
-                                   FontSize="13" Text="{Binding Name}" />
-                        <ItemsControl Grid.Column="1" VerticalAlignment="Center"
-                                      ItemsSource="{Binding Options}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal" Spacing="5" Margin="7, 3" />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                        </ItemsControl>
-                        <Button Grid.Column="2"
-                                Width="58" Height="30" Margin="3" FontSize="12"
-                                TextBlock.TextAlignment="Center"
-                                Content="{Binding ButtonText}"
-                                Command="{Binding ToggleCommand}" />
-                        <Border Grid.Column="3"
-                                CornerRadius="8" Width="16" Height="16"
-                                Margin="7, 7, 10, 7" VerticalAlignment="Center"
-                                Background="{Binding StatusBrush}" />
-                    </Grid>
+                        <Grid VerticalAlignment="Center"
+                              ColumnDefinitions="*,Auto,Auto,Auto"
+                              RowDefinitions="Auto, Auto">
+                            <TextBlock Grid.Column="0"
+                                       Margin="7" VerticalAlignment="Center"
+                                       FontSize="13" Text="{Binding Name}" />
+                            <ItemsControl Grid.Column="1" VerticalAlignment="Center"
+                                          ItemsSource="{Binding Options}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="5" Margin="7, 3" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                            <Button Grid.Column="2"
+                                    Width="58" Height="30" Margin="3" FontSize="12"
+                                    TextBlock.TextAlignment="Center"
+                                    Content="{Binding ButtonText}"
+                                    Command="{Binding ToggleCommand}" />
+                            <Border Grid.Column="3"
+                                    CornerRadius="8" Width="16" Height="16"
+                                    Margin="7, 7, 10, 7" VerticalAlignment="Center"
+                                    Background="{Binding StatusBrush}" />
+                            <Border Grid.Row="1" Grid.ColumnSpan="4"
+                                    IsVisible="{Binding HasError}"
+                                    Background="#40FF0000"
+                                    CornerRadius="6"
+                                    Margin="7,0,7,7"
+                                    Padding="6">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Grid.Column="0" Text="{Binding ErrorMessage}" TextWrapping="Wrap"/>
+                                    <Button Grid.Column="1" Content="X"
+                                            MinHeight="0" Height="20"
+                                            Width="20"
+                                            Padding="1"
+                                            TextBlock.TextAlignment="Center"
+                                            FontSize="12"
+                                            Command="{Binding DismissErrorCommand}"/>
+                                </Grid>
+                            </Border>
+                        </Grid>
                 </Border>
             </DataTemplate>
         </ItemsControl.ItemTemplate>
