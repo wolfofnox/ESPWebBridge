@@ -1,0 +1,72 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:ESPWebBridge.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:options="using:ESPWebBridge.Services.Options"
+        d:DataContext="{x:Static vm:DesignData.Services}"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="ESPWebBridge.Views.ServicesView"
+        x:DataType="vm:ServicesViewModel">
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="{x:Type options:TextOption}">
+            <TextBox Text="{Binding Value, Mode=TwoWay}"
+                     PlaceholderText="{Binding Label}"
+                     ToolTip.Tip="{Binding Label}"
+                     Width="105" Height="22" MinHeight="0"
+                     Margin="3,0" Padding="5,1" FontSize="11"
+                     VerticalContentAlignment="Center" />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type options:ToggleOption}">
+            <CheckBox IsChecked="{Binding Value, Mode=TwoWay}"
+                      ToolTip.Tip="{Binding Label}"
+                      Width="20" Height="20"
+                      VerticalAlignment="Center" />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type options:NumberOption}">
+            <TextBox Text="{Binding Value, Mode=TwoWay}"
+                     PlaceholderText="{Binding Label}"
+                     ToolTip.Tip="{Binding Label}"
+                     Width="64" Height="22" MinHeight="0"
+                     Margin="3,0" Padding="5,1" FontSize="11"
+                     VerticalContentAlignment="Center" />
+        </DataTemplate>
+    </UserControl.DataTemplates>
+    <ItemsControl ItemsSource="{Binding Services}"
+                VerticalAlignment="Center"
+                Margin="3"
+                MaxWidth="600">
+        <ItemsControl.ItemTemplate>
+            <DataTemplate>
+                <Border Background="#34808080"
+                        BorderThickness="2" BorderBrush="#60808080"
+                        Margin="4" CornerRadius="12">
+                    <Grid VerticalAlignment="Center"
+                          ColumnDefinitions="*,Auto,Auto,Auto">
+                        <TextBlock Grid.Column="0"
+                                   Margin="7" VerticalAlignment="Center"
+                                   FontSize="13" Text="{Binding Name}" />
+                        <ItemsControl Grid.Column="1" VerticalAlignment="Center"
+                                      ItemsSource="{Binding Options}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="5" Margin="7, 3" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                        <Button Grid.Column="2"
+                                Width="58" Height="30" Margin="3" FontSize="12"
+                                TextBlock.TextAlignment="Center"
+                                Content="{Binding ButtonText}"
+                                Command="{Binding ToggleCommand}" />
+                        <Border Grid.Column="3"
+                                CornerRadius="8" Width="16" Height="16"
+                                Margin="7, 7, 10, 7" VerticalAlignment="Center"
+                                Background="{Binding StatusBrush}" />
+                    </Grid>
+                </Border>
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+</UserControl>
