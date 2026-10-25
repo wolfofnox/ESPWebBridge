@@ -7,32 +7,27 @@ public interface IServiceOption
     string Label { get; }
 }
 
-public sealed partial class TextOption : ObservableObject, IServiceOption
+public sealed partial class TextOption(string label, string? defaultValue = null) : ObservableObject, IServiceOption
 {
-    public TextOption(string label) => Label = label;
-
-    public string Label { get; }
+    public string Label { get; } = label;
 
     [ObservableProperty]
-    private string value = string.Empty;
+    private string value = defaultValue ?? string.Empty;
 }
 
-public sealed partial class ToggleOption : ObservableObject, IServiceOption
+public sealed partial class ToggleOption(string label, bool defaultValue = false) : ObservableObject, IServiceOption
 {
-    public ToggleOption(string label) => Label = label;
-
-    public string Label { get; }
+    public string Label { get; } =label;
 
     [ObservableProperty]
-    private bool value;
+    private bool value = defaultValue;
+
 }
 
-public sealed partial class NumberOption : ObservableObject, IServiceOption
+public sealed partial class NumberOption(string label, double defaultValue = 0) : ObservableObject, IServiceOption
 {
-    public NumberOption(string label) => Label = label;
-
-    public string Label { get; }
+    public string Label { get; } = label;
 
     [ObservableProperty]
-    private double value;
+    private double value = defaultValue;
 }
