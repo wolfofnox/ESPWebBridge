@@ -13,7 +13,7 @@ using System.Diagnostics;
 
 namespace ESPWebBridge.Services.WebPreview;
 
-public sealed class WebPreviewService : IManagedService
+public sealed class WebPreviewService(int vitePort) : IManagedService
 {
     public string Name => "WebPage Preview";
     public ServiceStatus Status { get; private set; } = ServiceStatus.Stopped;
@@ -26,6 +26,7 @@ public sealed class WebPreviewService : IManagedService
 
     private WebApplication? _app;
     private InMemoryConfigProvider? _proxyConfig;
+    private int _vitePort = vitePort;
 
     private IReadOnlyList<RouteConfig> _routes => new[]
     {
@@ -46,6 +47,17 @@ public sealed class WebPreviewService : IManagedService
                 ["esp-device"] = new DestinationConfig
                 {
                     Address = EspAddress.Value
+                }
+            }
+        },
+        new ClusterConfig
+        {
+            ClusterId = "vite",
+            Destinations = new Dictionary<string, DestinationConfig>
+            {
+                ["vite-server"] = new DestinationConfig
+                {
+                    Address = $"localhost:{_vitePort}"
                 }
             }
         }
@@ -101,7 +113,7 @@ public sealed class WebPreviewService : IManagedService
         {
             FileName = "npm",
             WorkingDirectory = WebPageDir.Value,
-            Arguments = "run dev -- --host 127.0.0.1 --port 5173 --strictPort"
+            Arguments = $"run dev -- --host 127.0.0.1 --port {_vitePort} --strictPort"
         };
         process = Process.Start(startInfo);
         if (process is null) throw new InvalidOperationException("Failed to start npm --version");
