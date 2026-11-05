@@ -8,7 +8,7 @@ namespace ESPWebBridge;
 
 sealed class Program
 {
-    public static IConfiguration Configuration { get; private set; } = null!;
+    public static IConfiguration Configuration { get; private set; } = new ConfigurationBuilder().Build();
 
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized

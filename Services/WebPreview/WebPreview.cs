@@ -10,33 +10,65 @@ using Microsoft.Extensions.DependencyInjection;
 using Yarp.ReverseProxy.Configuration;
 using System.IO;
 using System.Diagnostics;
+using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+using System.Linq;
+using Microsoft.AspNetCore.Routing;
 
 namespace ESPWebBridge.Services.WebPreview;
 
-public sealed class WebPreviewService(int vitePort) : IManagedService
+public sealed class RoutingOption : OptionGroup
 {
+    public RoutingOption(IReadOnlyList<string> destination_ids, string defaultPathRegex = "", int defaultDestinationIdIndex = 0)
+        : this(
+            new TextOption("Path pattern", defaultValue: defaultPathRegex),
+            new ComboBoxOption("Method", ["any", "GET", "POST"]),
+            new ComboBoxOption("Destination", destination_ids, defaultSelectionIndex:defaultDestinationIdIndex),
+            new ToggleOption("Log Requests", defaultValue:true))
+    {}
+
+    private RoutingOption(
+        TextOption pathRegex, 
+        ComboBoxOption method, 
+        ComboBoxOption destination_id,
+        ToggleOption logRequests)
+        : base("Routing", [pathRegex, method, destination_id, logRequests])
+    {
+        PathRegex = pathRegex;
+        Method = method;
+        Destination = destination_id;
+        LogRequests = logRequests;
+    }
+
+    public TextOption PathRegex { get; }
+    public ComboBoxOption Method { get; }
+    public ComboBoxOption Destination { get; }
+    public ToggleOption LogRequests { get; }
+}
+
+public sealed class WebPreviewService : IManagedService
+{
+    public WebPreviewService(int vitePort)
+    {
+        _vitePort = vitePort;
+        AddRoutingOptionButton = new("Add routing option", onAddRoutingOptionClick);
+
+        RoutingOptions.CollectionChanged += (_,_) => OptionsChanged?.Invoke(this, EventArgs.Empty);
+    }
     public string Name => "WebPage Preview";
     public ServiceStatus Status { get; private set; } = ServiceStatus.Stopped;
     public event EventHandler? StatusChanged;
+    public event EventHandler? OptionsChanged;
 
-    public TextOption EspAddress { get; } = new("ESP Address", "http://localhost:5173");
-    public TextOption WebPageDir { get; } = new("WebPage Directory", "/home/viktorpotuznik/Documents/Coding/Projects/ESPWebBridge/Web");
-
-    public IReadOnlyList<IServiceOption> Options => [EspAddress, WebPageDir];
+    public TextOption EspAddress { get; } = new("ESP Address", true, "http://localhost:5084");
+    public TextOption WebPageDir { get; } = new("WebPage Directory", true, "/home/viktorpotuznik/Documents/Coding/Projects/ESPWebBridge/Web");
+    public ObservableCollection<RoutingOption> RoutingOptions { get; } = [new(["esp", "vite"], "/api/{**catch-all}", 0), new(["esp", "vite"], "{**catch-all}", 1)];
+    public ButtonOption AddRoutingOptionButton { get; }
+    public IReadOnlyList<IServiceOption> Options => [EspAddress, WebPageDir, .. RoutingOptions, AddRoutingOptionButton];
 
     private WebApplication? _app;
     private InMemoryConfigProvider? _proxyConfig;
-    private int _vitePort = vitePort;
-
-    private IReadOnlyList<RouteConfig> _routes => new[]
-    {
-        new RouteConfig
-        {
-            RouteId = "esp-all",
-            ClusterId = "esp",
-            Match = new RouteMatch { Path = "{**catch-all}" }
-        }
-    };
+    private int _vitePort;
     private IReadOnlyList<ClusterConfig> _clusters => new[]
     {
         new ClusterConfig
@@ -57,12 +89,13 @@ public sealed class WebPreviewService(int vitePort) : IManagedService
             {
                 ["vite-server"] = new DestinationConfig
                 {
-                    Address = $"localhost:{_vitePort}"
+                    Address = $"http://localhost:{_vitePort}"
                 }
             }
         }
     };
 
+    private void onAddRoutingOptionClick() {RoutingOptions.Add(new RoutingOption(["esp", "vite"]));}
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
@@ -74,7 +107,7 @@ public sealed class WebPreviewService(int vitePort) : IManagedService
 
         // TODO throw exception
         if (!Uri.TryCreate(EspAddress.Value, UriKind.Absolute, out var uri) &&
-        (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)) return;
+        (uri?.Scheme == Uri.UriSchemeHttp || uri?.Scheme == Uri.UriSchemeHttps)) return;
 
         var startInfo = new ProcessStartInfo
         {
@@ -121,9 +154,23 @@ public sealed class WebPreviewService(int vitePort) : IManagedService
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseUrls("http://127.0.0.1:5174");
 
+        var routes =
+            RoutingOptions.Select((routing, index) => new RouteConfig
+            {
+                RouteId = $"route-{index}",
+                ClusterId = routing.Destination.Value,
+                Match = new RouteMatch
+                {
+                    Path = routing.PathRegex.Value,
+                    Methods = string.Equals(routing.Method.Value, "any", StringComparison.OrdinalIgnoreCase)
+                        ? null
+                        : [routing.Method.Value]
+                }
+            }).ToArray();
+
         builder.Services
             .AddReverseProxy()
-            .LoadFromMemory(_routes, _clusters);
+            .LoadFromMemory(routes, _clusters);
 
         var app = builder.Build();
         app.MapReverseProxy();

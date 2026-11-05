@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -21,12 +22,33 @@ public partial class ServiceViewModel : ViewModelBase
           OnPropertyChanged(nameof(ButtonText));
           OnPropertyChanged(nameof(StatusBrush));  
         };
+        _service.OptionsChanged += (_,_) =>
+        {
+            OnPropertyChanged(nameof(QuickOptions));
+            OnPropertyChanged(nameof(OtherOptions));
+        };
     }
     public string Name => _service.Name;
 
     private ServiceStatus Status => _service.Status;
 
-    public IReadOnlyList<IServiceOption> Options => _service.Options;
+    public IReadOnlyList<IServiceOption> QuickOptions => _service.Options
+        .Where(opt => opt.IsQuickOption)
+        .ToArray();
+    
+    public IReadOnlyList<IServiceOption> OtherOptions => _service.Options
+        .Where(opt => opt.IsQuickOption == false)
+        .ToArray();
+
+    [ObservableProperty]
+    private bool showOtherOptions = false;
+
+    public string OtherOptionsChevron => ShowOtherOptions ? "⌃" : "⌄";
+
+    partial void OnShowOtherOptionsChanged(bool value) => OnPropertyChanged(nameof(OtherOptionsChevron));
+
+    [RelayCommand]
+    private void ToggleOtherOptions() => ShowOtherOptions = !ShowOtherOptions;
 
     [ObservableProperty]
     private string? errorMessage;

@@ -23,6 +23,7 @@ public interface IManagedService
     event EventHandler? StatusChanged;
 
     IReadOnlyList<IServiceOption> Options {get;}
+    event EventHandler? OptionsChanged;
 
     Task StartAsync(CancellationToken cancellationToken = default);
     Task StopAsync(CancellationToken cancellationToken = default);

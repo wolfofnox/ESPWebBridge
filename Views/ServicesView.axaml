@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:options="using:ESPWebBridge.Services.Options"
+        xmlns:controls="using:ESPWebBridge.Controls"
         d:DataContext="{x:Static vm:DesignData.Services}"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="ESPWebBridge.Views.ServicesView"
@@ -13,7 +14,8 @@
             <TextBox Text="{Binding Value, Mode=TwoWay}"
                      PlaceholderText="{Binding Label}"
                      ToolTip.Tip="{Binding Label}"
-                     Width="105" Height="22" MinHeight="0"
+                     TextWrapping="NoWrap"
+                     MinWidth="0" MaxWidth="300" Height="22" MinHeight="22"
                      Margin="3,0" Padding="5,1" FontSize="11"
                      VerticalContentAlignment="Center" />
         </DataTemplate>
@@ -27,9 +29,39 @@
             <TextBox Text="{Binding Value, Mode=TwoWay}"
                      PlaceholderText="{Binding Label}"
                      ToolTip.Tip="{Binding Label}"
-                     Width="64" Height="22" MinHeight="0"
-                     Margin="3,0" Padding="5,1" FontSize="11"
+                     TextWrapping="NoWrap"
+                     MinWidth="0" MaxWidth="128" Height="22" MinHeight="22"
+                     Padding="5,1" FontSize="11"
                      VerticalContentAlignment="Center" />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type options:ComboBoxOption}">
+            <ComboBox ItemsSource="{Binding Choices}"
+                      SelectedIndex="{Binding SelectionIndex, Mode=TwoWay}"
+                      ToolTip.Tip="{Binding Label}"
+                      MinWidth="0" MaxWidth="150" Height="22" MinHeight="22"
+                      Padding="5,1" FontSize="11"
+                      VerticalAlignment="Center"/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type options:ButtonOption}">
+            <Button MinWidth="40" Height="30" Margin="3" FontSize="12"
+                    TextBlock.TextAlignment="Center"
+                    Content="{Binding Label}"
+                    Command="{Binding ClickCommand}" />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type options:OptionGroup}">
+            <Border BorderBrush="#41000000" BorderThickness="1" CornerRadius="10">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Margin="7" VerticalAlignment="Center"
+                            FontSize="13" Text="{Binding Label}" />
+                    <ItemsControl ItemsSource="{Binding Options}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <controls:ShrinkToFitPanel Spacing="5"></controls:ShrinkToFitPanel>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
         </DataTemplate>
     </UserControl.DataTemplates>
     <ItemsControl ItemsSource="{Binding Services}"
@@ -42,16 +74,16 @@
                         BorderThickness="2" BorderBrush="#60808080"
                         Margin="4" CornerRadius="12">
                         <Grid VerticalAlignment="Center"
-                              ColumnDefinitions="*,Auto,Auto,Auto"
-                              RowDefinitions="Auto, Auto">
+                              ColumnDefinitions="Auto,1*,Auto,Auto, Auto"
+                              RowDefinitions="Auto, Auto, Auto">
                             <TextBlock Grid.Column="0"
                                        Margin="7" VerticalAlignment="Center"
                                        FontSize="13" Text="{Binding Name}" />
                             <ItemsControl Grid.Column="1" VerticalAlignment="Center"
-                                          ItemsSource="{Binding Options}">
+                                          ItemsSource="{Binding QuickOptions}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal" Spacing="5" Margin="7, 3" />
+                                        <controls:ShrinkToFitPanel Spacing="5" Margin="7, 3" />
                                     </ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
                             </ItemsControl>
@@ -62,9 +94,29 @@
                                     Command="{Binding ToggleCommand}" />
                             <Border Grid.Column="3"
                                     CornerRadius="8" Width="16" Height="16"
-                                    Margin="7, 7, 10, 7" VerticalAlignment="Center"
+                                    Margin="7, 7, 7, 7" VerticalAlignment="Center"
                                     Background="{Binding StatusBrush}" />
-                            <Border Grid.Row="1" Grid.ColumnSpan="4"
+                            <Button Grid.Column="4"
+                                    Width="24" Height="24" MinWidth="0" MinHeight="0"
+                                    Padding="0" Margin="4, 4, 8, 4"
+                                    Background="Transparent" BorderBrush="Transparent"
+                                    FontSize="23" FontWeight="SemiBold"
+                                    Content="{Binding OtherOptionsChevron}"
+                                    HorizontalContentAlignment="Center"
+                                    VerticalContentAlignment="Center"
+                                    ToolTip.Tip="Show other options"
+                                    Command="{Binding ToggleOtherOptionsCommand}" />
+                            <ItemsControl Grid.Row="1" Grid.ColumnSpan="5"
+                                VerticalAlignment="Center"
+                                ItemsSource="{Binding OtherOptions}"
+                                IsVisible="{Binding ShowOtherOptions}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Vertical" Spacing="5" Margin="7, 3" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                            <Border Grid.Row="2" Grid.ColumnSpan="5"
                                     IsVisible="{Binding HasError}"
                                     Background="#40FF0000"
                                     CornerRadius="6"
