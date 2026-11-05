@@ -19,7 +19,7 @@ public partial class App : Application
         var vitePort = Program.Configuration.GetValue<int>("WebPrevier:VitePort", 5173);
         var services = new Services.IManagedService[]
         {
-            new Services.WebPreview.WebPreviewService()
+            new Services.WebPreview.WebPreviewService(vitePort)
         };
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
