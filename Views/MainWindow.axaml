@@ -15,7 +15,7 @@
             <views:ServicesView DataContext="{Binding ServicesModel}" />
         </TabItem>
         <TabItem Header="Web Preview">
-            T.B.D.
+            <views:WebView DataContext="{Binding WebModel}"/>
         </TabItem>
     </TabControl>
 

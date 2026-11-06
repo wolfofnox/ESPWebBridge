@@ -48,9 +48,10 @@ public sealed class RoutingOption : OptionGroup
 
 public sealed class WebPreviewService : IManagedService
 {
-    public WebPreviewService(int vitePort)
+    public WebPreviewService(int vitePort, int appPort)
     {
         _vitePort = vitePort;
+        _appPort = appPort;
         AddRoutingOptionButton = new("Add routing option", onAddRoutingOptionClick);
 
         RoutingOptions.CollectionChanged += (_,_) => OptionsChanged?.Invoke(this, EventArgs.Empty);
@@ -69,6 +70,7 @@ public sealed class WebPreviewService : IManagedService
     private WebApplication? _app;
     private InMemoryConfigProvider? _proxyConfig;
     private int _vitePort;
+    private int _appPort;
     private IReadOnlyList<ClusterConfig> _clusters => new[]
     {
         new ClusterConfig
@@ -152,7 +154,7 @@ public sealed class WebPreviewService : IManagedService
         if (process is null) throw new InvalidOperationException("Failed to start npm --version");
         
         var builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseUrls("http://127.0.0.1:5174");
+        builder.WebHost.UseUrls($"http://127.0.0.1:{_appPort}");
 
         var routes =
             RoutingOptions.Select((routing, index) => new RouteConfig

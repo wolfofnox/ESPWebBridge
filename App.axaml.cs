@@ -17,16 +17,17 @@ public partial class App : Application
     public override void OnFrameworkInitializationCompleted()
     {
         var vitePort = Program.Configuration.GetValue<int>("WebPrevier:VitePort", 5173);
+        var appPort = Program.Configuration.GetValue<int>("WebPreview:AppPort", 5174);
         var services = new Services.IManagedService[]
         {
-            new Services.WebPreview.WebPreviewService(vitePort)
+            new Services.WebPreview.WebPreviewService(vitePort, appPort)
         };
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.MainWindow = new MainWindow
             {
-                DataContext = new MainViewModel(services),
+                DataContext = new MainViewModel(services, appPort),
             };
         }
 
