@@ -7,18 +7,60 @@
         d:DataContext="{x:Static vm:DesignData.WebView}"
         x:Class="ESPWebBridge.Views.WebView"
         x:DataType="vm:WebViewModel">
-    <Grid ColumnDefinitions="Auto, *, Auto, Auto" RowDefinitions="Auto, *"
+    <Grid ColumnDefinitions="Auto, Auto, Auto, *, Auto" RowDefinitions="Auto, *"
           Margin="10"
-          RowSpacing="10" ColumnSpacing="10">
+          RowSpacing="10" ColumnSpacing="0">
+        <Button Grid.Column="0"
+            Width="30" Height="30"
+            Padding="2" Margin="1"
+            Background="#00000000"
+            Click="GoBack"
+            IsEnabled="False"
+            x:Name="BackButton">
+            <Button.Content>
+                <Image Source="avares://ESPWebBridge/Assets/Icons/arrow-left.png"/>
+            </Button.Content>
+        </Button>
+        <Button Grid.Column="1"
+            Width="30" Height="30"
+            Padding="2" Margin="1"
+            Background="#00000000"
+            IsEnabled="False"
+            Click="GoForward"
+            x:Name="ForwardButton">
+            <Button.Content>
+                <Image Source="avares://ESPWebBridge/Assets/Icons/arrow-right.png"/>
+            </Button.Content>
+        </Button>
+        <Button Grid.Column="2"
+            Width="30" Height="30"
+            Padding="2" Margin="1"
+            Background="#00000000"
+            Click="Reload">
+            <Button.Content>
+                <Image Source="avares://ESPWebBridge/Assets/Icons/reload.png"/>
+            </Button.Content>
+        </Button>
         <TextBox x:Name="AddressBox"
-                 Text="{Binding Address}"
+                 Text="{Binding WebPrewiewUri, Mode=OneWay}"
                  KeyDown="AddressBox_KeyDown"
-                 Grid.Row="0" Grid.Column="1"
-                 FontSize="10" />
+                 Grid.Row="0" Grid.Column="3"
+                 FontSize="10"
+                 Margin="5 0" />
+        <Button Grid.Column="4"
+            Width="30" Height="30"
+            Padding="2" Margin="1"
+            Background="#00000000"
+            Click="GoHome">
+            <Button.Content>
+                <Image Source="avares://ESPWebBridge/Assets/Icons/home.png"/>
+            </Button.Content>
+        </Button>
         <Border BorderBrush="#AC2B2B2B" BorderThickness="2"
-                Grid.Row="1" Grid.ColumnSpan="4">
+                Grid.Row="1" Grid.ColumnSpan="5">
             <NativeWebView x:Name="Browser"
-                Source="{Binding WebPrewiewUri}"/>
+                Source="{Binding WebPrewiewUri}"
+                NavigationCompleted="Browser_NavigationCompleted"/>
         </Border>
     </Grid>
 
