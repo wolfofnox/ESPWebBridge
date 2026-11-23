@@ -101,11 +101,12 @@
                                     Padding="0" Margin="4, 4, 8, 4"
                                     Background="Transparent" BorderBrush="Transparent"
                                     FontSize="23" FontWeight="SemiBold"
-                                    Content="{Binding OtherOptionsChevron}"
                                     HorizontalContentAlignment="Center"
                                     VerticalContentAlignment="Center"
                                     ToolTip.Tip="Show other options"
-                                    Command="{Binding ToggleOtherOptionsCommand}" />
+                                    Command="{Binding ToggleOtherOptionsCommand}">
+                                <Image Source="{Binding OtherOptionsChevron}" />
+                            </Button>
                             <ItemsControl Grid.Row="1" Grid.ColumnSpan="5"
                                 VerticalAlignment="Center"
                                 ItemsSource="{Binding OtherOptions}"

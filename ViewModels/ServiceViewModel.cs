@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ESPWebBridge.Services;
@@ -43,7 +45,12 @@ public partial class ServiceViewModel : ViewModelBase
     [ObservableProperty]
     private bool showOtherOptions = false;
 
-    public string OtherOptionsChevron => ShowOtherOptions ? "⌃" : "⌄";
+    private static readonly IImage ChevronUp = new Bitmap(AssetLoader.Open(
+        new Uri("avares://ESPWebBridge/Assets/Icons/chevron-up.png")));
+    private static readonly IImage ChevronDown = new Bitmap(AssetLoader.Open(
+        new Uri("avares://ESPWebBridge/Assets/Icons/chevron-down.png")));
+
+    public IImage OtherOptionsChevron => ShowOtherOptions ? ChevronUp : ChevronDown;
 
     partial void OnShowOtherOptionsChanged(bool value) => OnPropertyChanged(nameof(OtherOptionsChevron));
 
