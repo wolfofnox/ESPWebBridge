@@ -14,6 +14,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.Linq;
 using Microsoft.AspNetCore.Routing;
+using System.Runtime.InteropServices;
 
 namespace ESPWebBridge.Services.WebPreview;
 
@@ -46,29 +47,44 @@ public sealed class RoutingOption : OptionGroup
     public ToggleOption LogRequests { get; }
 }
 
-public sealed class WebPreviewService : IManagedService
+public sealed class WebPreviewService : ManagedService
 {
+    public override string Name { get; protected set; } = "WebPage Preview";
+
+    public TextOption EspAddress { get; } = new("ESP Address", true, "http://localhost:5084");
+    public TextOption WebPageDir { get; } = new("WebPage Directory", true, "/home/viktorpotuznik/Documents/Coding/Projects/ESPWebBridge/Web");
+    public ObservableCollection<RoutingOption> RoutingOptions { get; } = [new(["esp", "vite"], "/api/{**catch-all}", 0), new(["esp", "vite"], "{**catch-all}", 1)];
+    public ButtonOption AddRoutingOptionButton { get; }
+
     public WebPreviewService(int vitePort, int appPort)
     {
         _vitePort = vitePort;
         _appPort = appPort;
         AddRoutingOptionButton = new("Add routing option", onAddRoutingOptionClick);
 
-        RoutingOptions.CollectionChanged += (_,_) => OptionsChanged?.Invoke(this, EventArgs.Empty);
+        AddOption(EspAddress);
+        AddOption(WebPageDir);
+
+        foreach (var option in RoutingOptions)
+            AddOption(option);
+
+        RoutingOptions.CollectionChanged += (_, e) =>
+        {
+            if (e.NewItems != null)
+                foreach (IServiceOption option in e.NewItems)
+                    AddOption(option);
+
+            if (e.OldItems != null)
+                foreach (IServiceOption option in e.OldItems)
+                    RemoveOption(option);
+        };
+        AddOption(AddRoutingOptionButton);
     }
-    public string Name => "WebPage Preview";
-    public ServiceStatus Status { get; private set; } = ServiceStatus.Stopped;
-    public event EventHandler? StatusChanged;
-    public event EventHandler? OptionsChanged;
-
-    public TextOption EspAddress { get; } = new("ESP Address", true, "http://localhost:5084");
-    public TextOption WebPageDir { get; } = new("WebPage Directory", true, "/home/viktorpotuznik/Documents/Coding/Projects/ESPWebBridge/Web");
-    public ObservableCollection<RoutingOption> RoutingOptions { get; } = [new(["esp", "vite"], "/api/{**catch-all}", 0), new(["esp", "vite"], "{**catch-all}", 1)];
-    public ButtonOption AddRoutingOptionButton { get; }
-    public IReadOnlyList<IServiceOption> Options => [EspAddress, WebPageDir, .. RoutingOptions, AddRoutingOptionButton];
-
     private WebApplication? _app;
     private InMemoryConfigProvider? _proxyConfig;
+    private Process? _viteProcess;
+    // This lock protects ownership transfer only. Never hold it while awaiting shutdown.
+    private readonly SemaphoreSlim _resourceLock = new(1, 1);
     private int _vitePort;
     private int _appPort;
     private IReadOnlyList<ClusterConfig> _clusters => new[]
@@ -99,65 +115,43 @@ public sealed class WebPreviewService : IManagedService
 
     private void onAddRoutingOptionClick() {RoutingOptions.Add(new RoutingOption(["esp", "vite"]));}
 
-    public async Task StartAsync(CancellationToken cancellationToken = default)
+    protected override async Task StartCoreAsync(CancellationToken cancellationToken)
     {
         if (_app is not null)
-            return;
+            throw new InvalidOperationException("Reverse proxy already running.");
 
-        // TODO throw exception or create directory
         if (!Directory.Exists(WebPageDir.Value)) throw new InvalidDataException("Invalid webpage directry: no such directory");
 
-        // TODO throw exception
-        if (!Uri.TryCreate(EspAddress.Value, UriKind.Absolute, out var uri) &&
-        (uri?.Scheme == Uri.UriSchemeHttp || uri?.Scheme == Uri.UriSchemeHttps)) return;
+        if (!Uri.TryCreate(EspAddress.Value, UriKind.Absolute, out var uri) ||
+        !(uri?.Scheme == Uri.UriSchemeHttp || uri?.Scheme == Uri.UriSchemeHttps))
+            throw new ArgumentException("Invalid ESP address");
 
-        var startInfo = new ProcessStartInfo
+        try
         {
-            FileName = "node",
-            WorkingDirectory = WebPageDir.Value,
-            Arguments = "--version"
-        };
-        var process = Process.Start(startInfo);
-        if (process is null) throw new InvalidOperationException("Failed to start node --version");
-        await process.WaitForExitAsync();
-        if (process.ExitCode != 0) throw new InvalidOperationException($"node failed: returned non-0 exit code: {process.ExitCode}");
+            await RunCommandAsync("node", "--version", cancellationToken);
+            await RunCommandAsync("npm", "--version", cancellationToken);
+            await RunCommandAsync("npm", "install", cancellationToken);
 
-        startInfo = new ProcessStartInfo
-        {
-            FileName = "npm",
-            WorkingDirectory = WebPageDir.Value,
-            Arguments = "--version"
-        };
-        process = Process.Start(startInfo);
-        if (process is null) throw new InvalidOperationException("Failed to start npm --version");
-        await process.WaitForExitAsync();
-        if (process.ExitCode != 0) throw new InvalidOperationException($"npm failed: returned non-0 exit code: {process.ExitCode}");
+            cancellationToken.ThrowIfCancellationRequested();
 
-        startInfo = new ProcessStartInfo
-        {
-            FileName = "npm",
-            WorkingDirectory = WebPageDir.Value,
-            Arguments = "install"
-        };
-        process = Process.Start(startInfo);
-        if (process is null) throw new InvalidOperationException("Failed to start npm --version");
-        await process.WaitForExitAsync();
-        if (process.ExitCode != 0) throw new InvalidOperationException($"npm failed: returned non-0 exit code: {process.ExitCode}");
-        
-        startInfo = new ProcessStartInfo
-        {
-            FileName = "npm",
-            WorkingDirectory = WebPageDir.Value,
-            Arguments = $"run dev -- --host 127.0.0.1 --port {_vitePort} --strictPort"
-        };
-        process = Process.Start(startInfo);
-        if (process is null) throw new InvalidOperationException("Failed to start npm --version");
-        
-        var builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseUrls($"http://127.0.0.1:{_appPort}");
+            var viteProcess = StartViteProcess();
+            try
+            {
+                await PublishViteProcessAsync(viteProcess, cancellationToken);
+            }
+            catch
+            {
+                await KillProcessAsync(viteProcess);
+                viteProcess.Dispose();
+                throw;
+            }
 
-        var routes =
-            RoutingOptions.Select((routing, index) => new RouteConfig
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var builder = WebApplication.CreateBuilder();
+            builder.WebHost.UseUrls($"http://127.0.0.1:{_appPort}");
+
+            var routes = RoutingOptions.Select((routing, index) => new RouteConfig
             {
                 RouteId = $"route-{index}",
                 ClusterId = routing.Destination.Value,
@@ -170,42 +164,199 @@ public sealed class WebPreviewService : IManagedService
                 }
             }).ToArray();
 
-        builder.Services
-            .AddReverseProxy()
-            .LoadFromMemory(routes, _clusters);
+            builder.Services.AddReverseProxy().LoadFromMemory(routes, _clusters);
 
-        var app = builder.Build();
-        app.MapReverseProxy();
-
-        _proxyConfig = app.Services
-            .GetRequiredService<InMemoryConfigProvider>();
-
-        await app.StartAsync();
-        _app = app;
-
-        Status = ServiceStatus.Running;
-        StatusChanged?.Invoke(this, EventArgs.Empty);
-        return;
+            var app = builder.Build();
+            try
+            {
+                app.MapReverseProxy();
+                await app.StartAsync(cancellationToken);
+                await PublishAppAsync(app, cancellationToken);
+            }
+            catch
+            {
+                await app.DisposeAsync();
+                throw;
+            }
+        }
+        catch
+        {
+            await ForceCleanupAsync();
+            throw;
+        }
     }
 
-    public async Task StopAsync(CancellationToken cancellationToken = default)
+    protected override async Task StopCoreAsync(CancellationToken cancellationToken)
     {
-        if (_app is null)
+        var resources = await TakeResourcesAsync();
+        try
+        {
+            await StopProxyGracefullyAsync(resources.App, cancellationToken);
+            await StopViteGracefullyAsync(resources.ViteProcess, cancellationToken);
+
+            if (resources.App is not null)
+                await resources.App.DisposeAsync();
+            resources.ViteProcess?.Dispose();
+        }
+        catch
+        {
+            // A kill cancels this token. Do not leave resources in the hands of a
+            // cancelled graceful stop; escalate before returning to ManagedService.
+            await ForceStopResourcesAsync(resources);
+            throw;
+        }
+    }
+
+    protected override async Task KillCoreAsync() => await ForceCleanupAsync();
+
+    private async Task RunCommandAsync(string fileName, string arguments, CancellationToken cancellationToken)
+    {
+        using var process = StartProcess(fileName, arguments);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch
+        {
+            await KillProcessAsync(process);
+            throw;
+        }
+
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException($"{fileName} {arguments} failed with exit code {process.ExitCode}.");
+    }
+
+    private Process StartProcess(string fileName, string arguments)
+    {
+        var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = fileName,
+            WorkingDirectory = WebPageDir.Value,
+            Arguments = arguments
+        });
+
+        return process ?? throw new InvalidOperationException($"Failed to start {fileName} {arguments}.");
+    }
+
+    private Process StartViteProcess()
+    {
+        // setsid gives npm and its Vite child a dedicated process group. SIGTERM can
+        // therefore stop them together, while Kill(entireProcessTree: true) remains
+        // the escalation path.
+        var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = "setsid",
+            WorkingDirectory = WebPageDir.Value,
+            Arguments = $"npm run dev -- --host 127.0.0.1 --port {_vitePort} --strictPort",
+            UseShellExecute = false
+        });
+
+        return process ?? throw new InvalidOperationException("Failed to start Vite.");
+    }
+
+    private async Task PublishViteProcessAsync(Process process, CancellationToken cancellationToken)
+    {
+        await _resourceLock.WaitAsync(cancellationToken);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _viteProcess = process;
+        }
+        finally
+        {
+            _resourceLock.Release();
+        }
+    }
+
+    private async Task PublishAppAsync(WebApplication app, CancellationToken cancellationToken)
+    {
+        await _resourceLock.WaitAsync(cancellationToken);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _app = app;
+            _proxyConfig = app.Services.GetRequiredService<InMemoryConfigProvider>();
+        }
+        finally
+        {
+            _resourceLock.Release();
+        }
+    }
+
+    private async Task<Resources> TakeResourcesAsync()
+    {
+        await _resourceLock.WaitAsync();
+        try
+        {
+            var resources = new Resources(_app, _viteProcess);
+            _app = null;
+            _proxyConfig = null;
+            _viteProcess = null;
+            return resources;
+        }
+        finally
+        {
+            _resourceLock.Release();
+        }
+    }
+
+    private async Task ForceCleanupAsync() => await ForceStopResourcesAsync(await TakeResourcesAsync());
+
+    private static async Task StopProxyGracefullyAsync(WebApplication? app, CancellationToken cancellationToken)
+    {
+        if (app is null)
             return;
 
-        await _app.StopAsync();
-        await _app.DisposeAsync();
-
-        _app = null;
-        _proxyConfig = null;
-        Status = ServiceStatus.Stopped;
-        StatusChanged?.Invoke(this, EventArgs.Empty);
-        return;
+        await app.StopAsync(cancellationToken);
     }
 
-    public void Kill()
+    private static async Task StopViteGracefullyAsync(Process? process, CancellationToken cancellationToken)
     {
-        Status = ServiceStatus.Stopped;
-        StatusChanged?.Invoke(this, EventArgs.Empty);
+        if (process is null)
+            return;
+
+        if (!process.HasExited && kill(-process.Id, SigTerm) != 0)
+            throw new InvalidOperationException("Could not send SIGTERM to the Vite process group.");
+
+        await process.WaitForExitAsync(cancellationToken);
     }
+
+    private static async Task ForceStopResourcesAsync(Resources resources)
+    {
+        try
+        {
+            if (resources.App is not null)
+                await resources.App.DisposeAsync();
+        }
+        finally
+        {
+            if (resources.ViteProcess is not null)
+            {
+                await KillProcessAsync(resources.ViteProcess);
+                resources.ViteProcess.Dispose();
+            }
+        }
+    }
+
+    private static async Task KillProcessAsync(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch (InvalidOperationException)
+        {
+            // The process exited between HasExited and Kill.
+        }
+
+        await process.WaitForExitAsync(CancellationToken.None);
+    }
+
+    private sealed record Resources(WebApplication? App, Process? ViteProcess);
+
+    private const int SigTerm = 15;
+
+    [DllImport("libc", SetLastError = true)]
+    private static extern int kill(int pid, int signal);
 }

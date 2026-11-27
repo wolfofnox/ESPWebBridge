@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Media;
@@ -24,7 +25,7 @@ public partial class ServiceViewModel : ViewModelBase
           OnPropertyChanged(nameof(ButtonText));
           OnPropertyChanged(nameof(StatusBrush));  
         };
-        _service.OptionsChanged += (_,_) =>
+        ((INotifyCollectionChanged)_service.Options).CollectionChanged += (_,_) =>
         {
             OnPropertyChanged(nameof(QuickOptions));
             OnPropertyChanged(nameof(OtherOptions));
