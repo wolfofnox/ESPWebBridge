@@ -24,6 +24,7 @@ public partial class ServiceViewModel : ViewModelBase
           OnPropertyChanged(nameof(Status));
           OnPropertyChanged(nameof(ButtonText));
           OnPropertyChanged(nameof(StatusBrush));  
+          OnPropertyChanged(nameof(StatusTooltip));
         };
         ((INotifyCollectionChanged)_service.Options).CollectionChanged += (_,_) =>
         {
@@ -69,19 +70,23 @@ public partial class ServiceViewModel : ViewModelBase
     {
         ServiceStatus.Stopped => "Start",
         ServiceStatus.Running => "Stop",
-        ServiceStatus.Paused => "Resume",
-        ServiceStatus.Error => "Retry",
-        _ => "Start"
+        _ => "Kill"
     };
+
+    public string StatusTooltip => Status.ToString();
 
     public IBrush StatusBrush => Status switch
     {
         ServiceStatus.Stopped => Brushes.Gray,
         ServiceStatus.Running => Brushes.Green,
-        ServiceStatus.Paused => Brushes.Orange,
         ServiceStatus.Error => Brushes.Red,
+        ServiceStatus.Starting => Brushes.Yellow,
+        ServiceStatus.Stopping => Brushes.Orange,
+        ServiceStatus.Killing => Brushes.Orange,
         _ => Brushes.Gray
     };
+
+    
 
     [RelayCommand]
     private async Task ToggleAsync()
@@ -90,10 +95,19 @@ public partial class ServiceViewModel : ViewModelBase
         
         try
         {
-            if (Status == ServiceStatus.Running)
-                await _service.StopAsync();
-            else
-                await _service.StartAsync();
+            switch (Status)
+            {
+                case ServiceStatus.Stopped:
+                    await _service.StartAsync();
+                    break;
+                case ServiceStatus.Running:
+                    await _service.StopAsync();
+                    break;
+                default:
+                    await _service.KillAsync();
+                    break;
+
+            };
         }
         catch (Exception ex)
         {

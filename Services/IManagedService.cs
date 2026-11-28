@@ -14,7 +14,6 @@ public enum ServiceStatus
 {
     Stopped,
     Running,
-    Paused,
     Error,
     Starting,
     Stopping,
@@ -98,7 +97,6 @@ public abstract class ManagedService : IManagedService
 
         Status = ServiceStatus.Starting;
         
-
         _startupTask = StartInternalAsync(_startupCts.Token);
 
         await _startupTask;
@@ -195,9 +193,9 @@ public abstract class ManagedService : IManagedService
         _startupCts?.Cancel();
         _shutdownCts?.Cancel();
 
-        _killTask = KillInternalAsync();
-
         Status = ServiceStatus.Killing;
+
+        _killTask = KillInternalAsync();
 
         await _killTask;
         

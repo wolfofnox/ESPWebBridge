@@ -15,6 +15,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using System.Linq;
 using Microsoft.AspNetCore.Routing;
 using System.Runtime.InteropServices;
+using System.Net.Sockets;
 
 namespace ESPWebBridge.Services.WebPreview;
 
@@ -83,6 +84,8 @@ public sealed class WebPreviewService : ManagedService
     private WebApplication? _app;
     private InMemoryConfigProvider? _proxyConfig;
     private Process? _viteProcess;
+    private Task<string>? _viteStandardOutput;
+    private Task<string>? _viteStandardError;
     // This lock protects ownership transfer only. Never hold it while awaiting shutdown.
     private readonly SemaphoreSlim _resourceLock = new(1, 1);
     private int _vitePort;
@@ -137,6 +140,7 @@ public sealed class WebPreviewService : ManagedService
             var viteProcess = StartViteProcess();
             try
             {
+                await WaitForViteAsync(viteProcess, cancellationToken);
                 await PublishViteProcessAsync(viteProcess, cancellationToken);
             }
             catch
@@ -211,7 +215,9 @@ public sealed class WebPreviewService : ManagedService
 
     private async Task RunCommandAsync(string fileName, string arguments, CancellationToken cancellationToken)
     {
-        using var process = StartProcess(fileName, arguments);
+        using var process = StartProcess(fileName, arguments, captureOutput: true);
+        var standardOutput = process.StandardOutput.ReadToEndAsync();
+        var standardError = process.StandardError.ReadToEndAsync();
         try
         {
             await process.WaitForExitAsync(cancellationToken);
@@ -219,23 +225,47 @@ public sealed class WebPreviewService : ManagedService
         catch
         {
             await KillProcessAsync(process);
+            await Task.WhenAll(standardOutput, standardError);
             throw;
         }
 
+        var output = await standardOutput;
+        var error = await standardError;
+
         if (process.ExitCode != 0)
-            throw new InvalidOperationException($"{fileName} {arguments} failed with exit code {process.ExitCode}.");
+        {
+            var diagnostic = TailNonEmptyLines(error) ?? TailNonEmptyLines(output);
+            var message = $"{fileName} {arguments} failed with exit code {process.ExitCode}.";
+            if (diagnostic is not null)
+                message += $"{Environment.NewLine}{diagnostic}";
+
+            throw new InvalidOperationException(message);
+        }
     }
 
-    private Process StartProcess(string fileName, string arguments)
+    private Process StartProcess(string fileName, string arguments, bool captureOutput = false)
     {
         var process = Process.Start(new ProcessStartInfo
         {
             FileName = fileName,
             WorkingDirectory = WebPageDir.Value,
-            Arguments = arguments
+            Arguments = arguments,
+            UseShellExecute = false,
+            RedirectStandardOutput = captureOutput,
+            RedirectStandardError = captureOutput
         });
 
         return process ?? throw new InvalidOperationException($"Failed to start {fileName} {arguments}.");
+    }
+
+    private static string? TailNonEmptyLines(string text, int count = 10)
+    {
+        var lines = text
+        .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .TakeLast(count)
+        .ToArray();
+
+        return lines.Length == 0 ? null : string.Join(Environment.NewLine, lines);
     }
 
     private Process StartViteProcess()
@@ -248,10 +278,44 @@ public sealed class WebPreviewService : ManagedService
             FileName = "setsid",
             WorkingDirectory = WebPageDir.Value,
             Arguments = $"npm run dev -- --host 127.0.0.1 --port {_vitePort} --strictPort",
-            UseShellExecute = false
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
         });
 
-        return process ?? throw new InvalidOperationException("Failed to start Vite.");
+        var viteProcess = process ?? throw new InvalidOperationException("Failed to start Vite.");
+        _viteStandardOutput = viteProcess.StandardOutput.ReadToEndAsync();
+        _viteStandardError = viteProcess.StandardError.ReadToEndAsync();
+        return viteProcess;
+    }
+
+    private async Task WaitForViteAsync(Process process, CancellationToken cancellationToken)
+    {
+        var exitTask = process.WaitForExitAsync(cancellationToken);
+        while (true)
+        {
+            using var client = new TcpClient();
+            var connectTask = client.ConnectAsync("127.0.0.1", _vitePort, cancellationToken).AsTask();
+            if (await Task.WhenAny(exitTask, connectTask) == exitTask)
+            {
+                await exitTask;
+                var error = _viteStandardError is null ? "" : await _viteStandardError;
+                var output = _viteStandardOutput is null ? "" : await _viteStandardOutput;
+                var diagnostic = TailNonEmptyLines(error) ?? TailNonEmptyLines(output);
+                throw new InvalidOperationException(
+                    $"Vite exited with code {process.ExitCode}.{(diagnostic is null ? "" : $"{Environment.NewLine}{diagnostic}")}");
+            }
+
+            try
+            {
+                await connectTask;
+                return;
+            }
+            catch (SocketException)
+            {
+                await Task.Delay(100, cancellationToken);
+            }
+        }
     }
 
     private async Task PublishViteProcessAsync(Process process, CancellationToken cancellationToken)
