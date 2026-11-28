@@ -16,6 +16,7 @@ using System.Linq;
 using Microsoft.AspNetCore.Routing;
 using System.Runtime.InteropServices;
 using System.Net.Sockets;
+using System.Text.Json.Nodes;
 
 namespace ESPWebBridge.Services.WebPreview;
 
@@ -133,7 +134,8 @@ public sealed class WebPreviewService : ManagedService
         {
             await RunCommandAsync("node", "--version", cancellationToken);
             await RunCommandAsync("npm", "--version", cancellationToken);
-            await RunCommandAsync("npm", "install", cancellationToken);
+
+            await EnsureViteProjectManifest(cancellationToken);
 
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -266,6 +268,43 @@ public sealed class WebPreviewService : ManagedService
         .ToArray();
 
         return lines.Length == 0 ? null : string.Join(Environment.NewLine, lines);
+    }
+
+    private async Task EnsureViteProjectManifest(CancellationToken cancellationToken)
+    {
+        var packageJson = Path.Combine(WebPageDir.Value, "package.json");
+        string vitePackage = Path.Combine( WebPageDir.Value, "node_modules", "vite", "package.json");
+        
+        // 1. Initialize npm if necessary
+        if (!File.Exists(packageJson))
+        {
+            await RunCommandAsync("npm", "init -y", cancellationToken);
+            await RunCommandAsync("npm", "pkg set private=true", cancellationToken);
+        }
+
+        // 2. Read package.json
+        var manifest = JsonNode.Parse(File.ReadAllText(packageJson))
+            ?? throw new InvalidOperationException("Invalid package.json");
+
+        // 3. Ensure dev script exists
+        if (manifest["scripts"]?["dev"] == null)
+        {
+            await RunCommandAsync("npm", "pkg set scripts.dev=vite", cancellationToken);
+        }
+
+        // 4. Ensure Vite is installed
+        if (!File.Exists(vitePackage))
+        {
+            bool viteDeclared =
+                manifest["dependencies"]?["vite"] != null ||
+                manifest["devDependencies"]?["vite"] != null;
+
+            if (!viteDeclared)
+            {
+                await RunCommandAsync("npm", "install --save-dev vite", cancellationToken);
+            }   
+        }
+        await RunCommandAsync("npm", "install", cancellationToken);
     }
 
     private Process StartViteProcess()
