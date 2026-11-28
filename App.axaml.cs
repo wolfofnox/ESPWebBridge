@@ -16,7 +16,7 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
-        var vitePort = Program.Configuration.GetValue<int>("WebPrevier:VitePort", 5173);
+        var vitePort = Program.Configuration.GetValue<int>("WebPreview:VitePort", 5173);
         var appPort = Program.Configuration.GetValue<int>("WebPreview:AppPort", 5174);
         var services = new Services.IManagedService[]
         {
